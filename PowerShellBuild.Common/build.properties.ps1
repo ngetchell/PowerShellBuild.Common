@@ -1,60 +1,45 @@
 
 #region Basic project settings
 
-# Use BuildHelpers module to normalize CI environment variables
-$useBuildHelpers = $true
+Set-BuildEnvironment -Force
 
 # Root directory for the project
-if ($useBuildHelpers) {
-    Set-BuildEnvironment -Force
-    $projectRoot = $env:BHProjectPath
-} else {
-    $projectRoot = $psake.context.originalDirectory
-}
+$projectRoot = $env:BHProjectPath
 
-# Root directory of PowerShell module
-if ($useBuildHelpers) {
-    Import-Module -Name BuildHelpers
-    Set-BuildEnvironment -Force
-    $srcRootDir = $env:BHPSModulePath
-} else {
-    if (Test-Path (Join-Path -Path $psake.context.originalDirectory -ChildPath src)) {
-        $srcRootDir = Join-Path -Path $psake.context.originalDirectory -ChildPath src
-    } else {
-        $srcRootDir = Join-Path -Path $psake.context.originalDirectory
-    }
-}
+# Root directory for the module
+$srcRootDir = $env:BHPSModulePath
 
 # The name of the module. This should match the basename of the PSD1 file
-if ($useBuildHelpers) {
-    $moduleName = $env:BHProjectName
-} else {
-    $moduleName = Get-Item $srcRootDir/*.psd1 |
-        Where-Object { $null -ne (Test-ModuleManifest -Path $_ -ErrorAction SilentlyContinue) } |
-        Select-Object -First 1 | Foreach-Object BaseName
-}
+$moduleName = $env:BHProjectName
 
 # Module version
-if ($useBuildHelpers) {
-    $moduleVersion = (Import-PowerShellDataFile -Path $env:BHPSModuleManifest).ModuleVersion
-} else {
-    $moduleVersion = (Get-Item $srcRootDir/*.psd1 | Select-Object -First | Import-PowerShellDataFile).ModuleVersion
-}
+$moduleVersion = (Import-PowerShellDataFile -Path $env:BHPSModuleManifest).ModuleVersion
+
+# Module manifest path
+$moduleManifestPath = $env:BHPSModuleManifest
 
 # Output directory when building a module
 [System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
-$outDir = Join-Path -Path $psake.context.originalDirectory -ChildPath Output
+$outDir = Join-Path -Path $projectRoot -ChildPath Output
 
 # Module output directory
 [System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
 $moduleOutDir = "$outDir/$moduleName/$moduleVersion"
+
+# Controls whether to "compile" module into single PSM1 or not
+[System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
+$compileModule = $false
 
 [System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
 $updatableHelpOutDir = Join-Path $OutDir UpdatableHelp
 
 # Default Locale used for help generation, defaults to en-US
 [System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
-$defaultLocale = 'en-US'
+$defaultLocale = (Get-UICulture).Name
+
+# Convert project readme into the module about file
+[System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
+$convertReadMeToAboutHelp = $false
 #endregion
 
 #region Script Analysis
@@ -80,13 +65,13 @@ $scriptAnalyzerSettingsPath = Join-Path $PSScriptRoot -ChildPath ScriptAnalyzerS
 #region File catalog
 
 # Enable/disable generation of a catalog (.cat) file for the module.
-[System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
-$catalogGenerationEnabled = $true
+# [System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
+# $catalogGenerationEnabled = $true
 
-# Select the hash version to use for the catalog file: 1 for SHA1 (compat with Windows 7 and
-# Windows Server 2008 R2), 2 for SHA2 to support only newer Windows versions.
-[System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
-$catalogVersion = 2
+# # Select the hash version to use for the catalog file: 1 for SHA1 (compat with Windows 7 and
+# # Windows Server 2008 R2), 2 for SHA2 to support only newer Windows versions.
+# [System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
+# $catalogVersion = 2
 #endregion
 
 #region Testing
@@ -103,6 +88,7 @@ $testRootDir = Join-Path -Path $projectRoot -ChildPath tests
 [System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
 $codeCoverageEnabled = $false
 
+# Fail Pester code coverage test if below this threshold
 [System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
 $codeCoverageThreshold = .75
 
@@ -128,6 +114,7 @@ $testOutputFormat = 'NUnitXml'
 #endregion
 
 #region Documentation
+# Directory PlatyPS markdown documentation will be saved to
 [System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
 $docsRootDir = Join-Path -Path $projectRoot -ChildPath 'docs'
 
